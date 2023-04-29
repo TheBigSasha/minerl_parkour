@@ -191,16 +191,24 @@ class PoVWithCompassAngleWrapper(gym.ObservationWrapper):
         self._compass_angle_scale = 180 / 255  # NOTE: `ScaledFloatFrame` will scale the pixel values with 255.0 later
 
         pov_space = self.env.observation_space.spaces['pov']
-        compass_angle_space = self.env.observation_space.spaces['compassAngle']
+        compass_angle_space = self.env.observation_space.spaces['compass']['angle']
 
-        low = self.observation({'pov': pov_space.low, 'compassAngle': compass_angle_space.low})
-        high = self.observation({'pov': pov_space.high, 'compassAngle': compass_angle_space.high})
+        low = self.observation({'pov': pov_space.low, 'compass': compass_angle_space.low})
+        high = self.observation({'pov': pov_space.high, 'compass': compass_angle_space.high})
 
         self.observation_space = gym.spaces.Box(low=low, high=high)
 
     def observation(self, observation):
         pov = observation['pov']
-        compass_scaled = observation['compassAngle'] / self._compass_angle_scale
+        if 'compass' not in observation:
+            compass_unscaled = gym.spaces.Box(low=0, high=255, shape=(64, 64, 3), dtype=np.uint8).sample()
+        else:
+            if 'angle' not in observation['compass']:
+                compass_unscaled = observation['compass']
+            else:
+                compass_unscaled = observation['compass']['angle']
+
+        compass_scaled = compass_unscaled / self._compass_angle_scale
         compass_channel = np.ones(shape=list(pov.shape[:-1]) + [1], dtype=pov.dtype) * compass_scaled
         return np.concatenate([pov, compass_channel], axis=-1)
 
@@ -220,10 +228,10 @@ class UnifiedObservationWrapper(gym.ObservationWrapper):
         low_dict = {'pov': pov_space.low}
         high_dict = {'pov': pov_space.high}
 
-        if 'compassAngle' in self.env.observation_space.spaces:
-            compass_angle_space = self.env.observation_space.spaces['compassAngle']
-            low_dict['compassAngle'] = compass_angle_space.low
-            high_dict['compassAngle'] = compass_angle_space.high
+        if 'compass' in self.env.observation_space.spaces:
+            compass_angle_space = self.env.observation_space.spaces['compass']['angle']
+            low_dict['compass']['angle'] = compass_angle_space.low
+            high_dict['compass']['angle'] = compass_angle_space.high
 
         if 'inventory' in self.env.observation_space.spaces:
             inventory_space = self.env.observation_space.spaces['inventory']
@@ -242,8 +250,8 @@ class UnifiedObservationWrapper(gym.ObservationWrapper):
         obs = observation['pov']
         pov_dtype = obs.dtype
 
-        if 'compassAngle' in observation:
-            compass_scaled = observation['compassAngle'] / self._compass_angle_scale
+        if 'compass' in observation:
+            compass_scaled = observation['compass']['angle'] / self._compass_angle_scale
             compass_channel = np.ones(shape=list(obs.shape[:-1]) + [1], dtype=pov_dtype) * compass_scaled
             obs = np.concatenate([obs, compass_channel], axis=-1)
         if 'inventory' in observation:
@@ -287,10 +295,10 @@ class FullObservationSpaceWrapper(gym.ObservationWrapper):
             low_dict['inventory'][obs_name] = obs_space.low
             high_dict['inventory'][obs_name] = obs_space.high
 
-        if 'compassAngle' in self.env.observation_space.spaces:
-            compass_angle_space = self.env.observation_space.spaces['compassAngle']
-            low_dict['compassAngle'] = compass_angle_space.low
-            high_dict['compassAngle'] = compass_angle_space.high
+        if 'compass' in self.env.observation_space.spaces:
+            compass_angle_space = self.env.observation_space.spaces['compass']['angle']
+            low_dict['compass']['angle'] = compass_angle_space.low
+            high_dict['compass']['angle'] = compass_angle_space.high
 
         low = self.observation(low_dict)
         high = self.observation(high_dict)
@@ -303,8 +311,8 @@ class FullObservationSpaceWrapper(gym.ObservationWrapper):
         frame = observation['pov']
         inventory = []
 
-        if 'compassAngle' in observation:
-            compass_scaled = observation['compassAngle'] / 180
+        if 'compass' in observation:
+            compass_scaled = observation['compass']['angle'] / 180
             inventory.append(compass_scaled)
 
         for obs_name in observation['inventory'].keys():
